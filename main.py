@@ -5,7 +5,7 @@ from pymongo import MongoClient
 import time
 
 # Constants
-BOT_TOKEN = ""
+BOT_TOKEN = "6973619618:AAERC40Khl5U8UM3wKOJoDbCnK7yUEvCl88"
 OWNER_ID = 6663845789  # Replace with your Telegram user ID
 MONGO_URI = "mongodb+srv://Cenzo:Cenzo123@cenzo.azbk1.mongodb.net/"
 
