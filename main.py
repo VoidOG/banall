@@ -1,140 +1,74 @@
 from telegram import Update
-from telegram.ext import (
-    Updater,
-    CommandHandler,
-    CallbackContext,
-    MessageHandler,
-    Filters,
-)
-import pymongo
+from telegram.ext import Application, CommandHandler, ContextTypes
+import logging
 
-# MongoDB Configuration
-MONGO_URI = "mongodb+srv://Cenzo:Cenzo123@cenzo.azbk1.mongodb.net/"
-client = pymongo.MongoClient(MONGO_URI)
-db = client['telegram_bot']
+# Enable logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Bot Configuration
-BOT_TOKEN = "6973619618:AAERC40Khl5U8UM3wKOJoDbCnK7yUEvCl88"
-OWNER_ID = 6663845789
+# Bot Token
+BOT_TOKEN = "7636888289:AAHbbR1Ku2D9kiiUheLk2yarduG8N1o_WbY"
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a welcome message."""
+    await update.message.reply_text("I'm a sticker deletion bot. Use /dStick to delete all stickers in this group.")
 
-# --- Functions --- #
+async def delete_all_stickers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Delete all stickers in the group chat and report the count."""
+    if update.effective_chat.type not in ["group", "supergroup"]:
+        await update.message.reply_text("This command can only be used in groups!")
+        return
 
-# Check bot aliveness
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Bot is alive and ready! 🟢")
+    # Check if the bot has delete permissions
+    bot_member = await update.effective_chat.get_member(context.bot.id)
+    if not bot_member.can_delete_messages:
+        await update.message.reply_text("I need delete permissions to remove stickers!")
+        return
 
-# Add authorized user
-def sauth(update: Update, context: CallbackContext):
-    if update.effective_user.id != OWNER_ID:
-        return update.message.reply_text("Unauthorized!")
-    if len(context.args) != 1:
-        return update.message.reply_text("Usage: /sauth <user_id>")
-    
-    user_id = int(context.args[0])
-    if db.auth_users.find_one({"_id": user_id}):
-        update.message.reply_text("User already authorized.")
-    else:
-        db.auth_users.insert_one({"_id": user_id})
-        update.message.reply_text(f"User {user_id} authorized.")
+    await update.message.reply_text("Deleting all stickers in this group. This might take a while...")
 
-# Remove authorized user
-def sunauth(update: Update, context: CallbackContext):
-    if update.effective_user.id != OWNER_ID:
-        return update.message.reply_text("Unauthorized!")
-    if len(context.args) != 1:
-        return update.message.reply_text("Usage: /sunauth <user_id>")
-    
-    user_id = int(context.args[0])
-    result = db.auth_users.delete_one({"_id": user_id})
-    if result.deleted_count > 0:
-        update.message.reply_text(f"User {user_id} unauthorized.")
-    else:
-        update.message.reply_text("User not found.")
+    sticker_count = 0
+    last_message_id = None  # Start from the most recent message
 
-# List authorized users
-def sauthusers(update: Update, context: CallbackContext):
-    if update.effective_user.id != OWNER_ID:
-        return update.message.reply_text("Unauthorized!")
-    
-    users = db.auth_users.find({})
-    if users.count_documents({}) > 0:
-        user_list = "\n".join([str(user["_id"]) for user in users])
-        update.message.reply_text(f"Authorized Users:\n{user_list}")
-    else:
-        update.message.reply_text("No authorized users.")
+    try:
+        while True:
+            # Fetch messages in batches (limit: 100 per request)
+            messages = await context.bot.get_chat_history(
+                chat_id=update.effective_chat.id, 
+                offset_id=last_message_id, 
+                limit=100
+            )
+            
+            if not messages:  # No more messages to fetch
+                break
 
-# Delete media
-def delmedia(update: Update, context: CallbackContext):
-    chat_id = update.effective_chat.id
-    if not is_authorized(update.effective_user.id):
-        return update.message.reply_text("Unauthorized!")
+            for message in messages:
+                if message.sticker:
+                    try:
+                        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=message.message_id)
+                        sticker_count += 1
+                    except Exception as e:
+                        logger.error(f"Failed to delete sticker: {e}")
 
-    context.bot.delete_message(chat_id, update.message.message_id)
+            # Update the last message ID to continue fetching older messages
+            last_message_id = messages[-1].message_id
 
-# Delete stickers
-def delsticker(update: Update, context: CallbackContext):
-    chat_id = update.effective_chat.id
-    if not is_authorized(update.effective_user.id):
-        return update.message.reply_text("Unauthorized!")
-
-    if update.message.sticker:
-        context.bot.delete_message(chat_id, update.message.message_id)
-
-# Delete GIFs
-def delgif(update: Update, context: CallbackContext):
-    chat_id = update.effective_chat.id
-    if not is_authorized(update.effective_user.id):
-        return update.message.reply_text("Unauthorized!")
-
-    if update.message.animation:
-        context.bot.delete_message(chat_id, update.message.message_id)
-
-# Help command
-def help_command(update: Update, context: CallbackContext):
-    help_text = """
-/start - Check if the bot is alive.
-/sauth <user_id> - Authorize a user. (Owner only)
-/sunauth <user_id> - Unauthorize a user. (Owner only)
-/sauthusers - List all authorized users. (Owner only)
-/delmedia - Delete all media.
-/delsticker - Delete all stickers.
-/delgif - Delete all GIFs.
-    """
-    update.message.reply_text(help_text)
-
-# Check if user is authorized
-def is_authorized(user_id):
-    return db.auth_users.find_one({"_id": user_id}) is not None
-
-# Error handler
-def error_handler(update: Update, context: CallbackContext):
-    print(f"Error: {context.error}")
-
-
-# --- Main Function --- #
+        # Notify the user how many stickers were deleted
+        await update.message.reply_text(f"Deleted {sticker_count} sticker(s) from this group.")
+    except Exception as e:
+        logger.error(f"Error while fetching or deleting messages: {e}")
+        await update.message.reply_text("An error occurred while trying to delete stickers.")
 
 def main():
-    updater = Updater(token=BOT_TOKEN, use_context=True)
-    dispatcher = updater.dispatcher
+    # Create the application
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    # Command Handlers
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("sauth", sauth))
-    dispatcher.add_handler(CommandHandler("sunauth", sunauth))
-    dispatcher.add_handler(CommandHandler("sauthusers", sauthusers))
-    dispatcher.add_handler(CommandHandler("delmedia", delmedia))
-    dispatcher.add_handler(CommandHandler("delsticker", delsticker))
-    dispatcher.add_handler(CommandHandler("delgif", delgif))
-    dispatcher.add_handler(CommandHandler("help", help_command))
+    # Add handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("dStick", delete_all_stickers))
 
-    # Error Handler
-    dispatcher.add_error_handler(error_handler)
-
-    # Start Bot
-    updater.start_polling()
-    updater.idle()
-
+    # Start the bot
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
