@@ -27,7 +27,7 @@ async def delete_all_stickers(chat_id):
 async def main(client, message):
     """Main entry point to delete stickers."""
     # Replace `CHAT_ID` with your target group's chat ID or username
-    CHAT_ID = "@chatterhood"  # e.g., -1001234567890 for private groups
+    CHAT_ID = -1001994840446  # e.g., -1001234567890 for private groups
 
     print("Deleting all stickers from the group...")
     await delete_all_stickers(CHAT_ID)
