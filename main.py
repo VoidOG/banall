@@ -1,4 +1,4 @@
-from telegram import Update, Chat
+from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import logging
 
@@ -25,20 +25,19 @@ async def delete_all_stickers(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("I need delete permissions to remove stickers!")
         return
 
-    await update.message.reply_text("Deleting all stickers in this group. This might take a while...")
+    # Notify the user that the process has started
+    notify_msg = await update.message.reply_text("Deleting all stickers in this group. This might take a while...")
 
     sticker_count = 0
-    last_message_id = None  # Start from the most recent message
+    last_message_id = None
 
     try:
-        # Fetch the chat object
-        chat = await context.bot.get_chat(update.effective_chat.id)
-
         while True:
-            # Fetch messages in batches
-            messages = await chat.get_history(
-                offset_id=last_message_id,
-                limit=100
+            # Fetch messages in batches (100 max per call)
+            messages = await context.bot.get_chat_history(
+                chat_id=update.effective_chat.id,
+                limit=100,
+                offset_id=last_message_id
             )
 
             if not messages:  # No more messages to fetch
@@ -47,19 +46,23 @@ async def delete_all_stickers(update: Update, context: ContextTypes.DEFAULT_TYPE
             for message in messages:
                 if message.sticker:
                     try:
-                        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=message.message_id)
+                        await context.bot.delete_message(
+                            chat_id=update.effective_chat.id,
+                            message_id=message.message_id
+                        )
                         sticker_count += 1
                     except Exception as e:
                         logger.error(f"Failed to delete sticker: {e}")
 
-            # Update the last message ID to continue fetching older messages
+            # Update the offset to fetch older messages
             last_message_id = messages[-1].message_id
 
-        # Notify the user how many stickers were deleted
-        await update.message.reply_text(f"Deleted {sticker_count} sticker(s) from this group.")
+        # Edit the initial message to show the final count
+        await notify_msg.edit_text(f"Deleted {sticker_count} sticker(s) from this group.")
     except Exception as e:
         logger.error(f"Error while fetching or deleting messages: {e}")
-        await update.message.reply_text("An error occurred while trying to delete stickers.")
+        if notify_msg:
+            await notify_msg.edit_text("An error occurred while trying to delete stickers.")
 
 def main():
     # Create the application
