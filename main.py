@@ -24,7 +24,7 @@ async def delete_all_stickers(chat_id):
         print(f"Error fetching or deleting messages: {e}")
 
 @app.on_message()
-async def main(client):
+async def main(client, message):
     """Main entry point to delete stickers."""
     # Replace `CHAT_ID` with your target group's chat ID or username
     CHAT_ID = "-1001994840446"  # e.g., -1001234567890 for private groups
@@ -33,4 +33,4 @@ async def main(client):
     await delete_all_stickers(CHAT_ID)
 
 if __name__ == "__main__":
-    app.run(main())
+    app.run()  # This automatically calls the `main` handler when a message is received.
