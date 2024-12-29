@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, Chat
 from telegram.ext import Application, CommandHandler, ContextTypes
 import logging
 
@@ -31,14 +31,16 @@ async def delete_all_stickers(update: Update, context: ContextTypes.DEFAULT_TYPE
     last_message_id = None  # Start from the most recent message
 
     try:
+        # Fetch the chat object
+        chat = await context.bot.get_chat(update.effective_chat.id)
+
         while True:
-            # Fetch messages in batches (limit: 100 per request)
-            messages = await context.bot.get_chat_history(
-                chat_id=update.effective_chat.id, 
-                offset_id=last_message_id, 
+            # Fetch messages in batches
+            messages = await chat.get_history(
+                offset_id=last_message_id,
                 limit=100
             )
-            
+
             if not messages:  # No more messages to fetch
                 break
 
