@@ -1,79 +1,36 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-import logging
+from pyrogram import Client
+from pyrogram.errors import RPCError
 
-# Enable logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Replace with your Pyrogram string session
+STRING_SESSION = "BQE8lCYAIILy1bqWn_JZB00JGpSlqGV6QCtBdwFBc17rsbGqcBeHrNBUKz0nugHOnMnhVhIUdKilAMr0V5IVjUnUooko1TYo2ps8LbgNhtEJYzU8IXlpUuxEKasB7kmcmn2Z5xXGChzRMkS7-2v6PuPdKGN-az8L_Rp4nVYO8G7eiY7gS6hbxmg3omM6Yq80RKmng27RvAW-wEd5ZHvVm6pbFZRhCmGtlpVV_LMfg5b5kUrT_mylLxUI6h2JC1YK4pnaUDka-LV2G_P2EmuvdDHN6ZdoRs8yG4v98X2Q0jUOTatLWP1vXcCGyQdzYfEVuZ59mS15QZ7emBCOBHCsCY_KqsoAAAAAGIyZUZAA"
 
-# Bot Token
-BOT_TOKEN = "7636888289:AAHbbR1Ku2D9kiiUheLk2yarduG8N1o_WbY"
+app = Client("my_account", session_string=STRING_SESSION)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send a welcome message."""
-    await update.message.reply_text("I'm a sticker deletion bot. Use /dStick to delete all stickers in this group.")
-
-async def delete_all_stickers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Delete all stickers in the group chat and report the count."""
-    if update.effective_chat.type not in ["group", "supergroup"]:
-        await update.message.reply_text("This command can only be used in groups!")
-        return
-
-    # Check if the bot has delete permissions
-    bot_member = await update.effective_chat.get_member(context.bot.id)
-    if not bot_member.can_delete_messages:
-        await update.message.reply_text("I need delete permissions to remove stickers!")
-        return
-
-    # Notify the user that the process has started
-    notify_msg = await update.message.reply_text("Deleting all stickers in this group. This might take a while...")
-
-    sticker_count = 0
-    last_message_id = None
+async def delete_all_stickers(chat_id):
+    """Fetch and delete all sticker messages in the group."""
+    deleted_count = 0
 
     try:
-        while True:
-            # Fetch messages in batches (100 max per call)
-            messages = await context.bot.get_chat_history(
-                chat_id=update.effective_chat.id,
-                limit=100,
-                offset_id=last_message_id
-            )
+        # Fetch and iterate through messages containing stickers
+        async for message in app.search_messages(chat_id, filter="stickers"):
+            try:
+                await app.delete_messages(chat_id, message.message_id)
+                deleted_count += 1
+            except RPCError as e:
+                print(f"Error deleting message {message.message_id}: {e}")
 
-            if not messages:  # No more messages to fetch
-                break
-
-            for message in messages:
-                if message.sticker:
-                    try:
-                        await context.bot.delete_message(
-                            chat_id=update.effective_chat.id,
-                            message_id=message.message_id
-                        )
-                        sticker_count += 1
-                    except Exception as e:
-                        logger.error(f"Failed to delete sticker: {e}")
-
-            # Update the offset to fetch older messages
-            last_message_id = messages[-1].message_id
-
-        # Edit the initial message to show the final count
-        await notify_msg.edit_text(f"Deleted {sticker_count} sticker(s) from this group.")
+        print(f"Deleted {deleted_count} stickers from the group.")
     except Exception as e:
-        logger.error(f"Error while fetching or deleting messages: {e}")
-        if notify_msg:
-            await notify_msg.edit_text("An error occurred while trying to delete stickers.")
+        print(f"Error fetching or deleting messages: {e}")
 
-def main():
-    # Create the application
-    application = Application.builder().token(BOT_TOKEN).build()
+@app.on_message()
+async def main(client):
+    """Main entry point to delete stickers."""
+    # Replace `CHAT_ID` with your target group's chat ID or username
+    CHAT_ID = "-1001994840446"  # e.g., -1001234567890 for private groups
 
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("dStick", delete_all_stickers))
-
-    # Start the bot
-    application.run_polling()
+    print("Deleting all stickers from the group...")
+    await delete_all_stickers(CHAT_ID)
 
 if __name__ == "__main__":
-    main()
+    app.run(main())
