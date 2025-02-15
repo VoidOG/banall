@@ -6,8 +6,8 @@ from telethon.tl.functions.channels import EditBannedRequest
 from telethon.tl.types import ChatBannedRights
 
 # Fixed API ID and API HASH
-API_ID = 123456  # Replace with your API ID
-API_HASH = "your_api_hash_here"  # Replace with your API HASH
+API_ID = 28561722  # Replace with your API ID
+API_HASH = "a538ba07656f746def99bed7032121cc"  # Replace with your API HASH
 
 # User Input for String Session
 STRING_SESSION = input("Enter Your String Session: ")
